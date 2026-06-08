@@ -5,9 +5,13 @@ from typing import Any
 import pytest
 from aws_lambda_powertools import Logger
 
-from serverless_toolkit.observability import (
+from serverless_toolkit.observability.lambda_logger import (
     get_lambda_logger,
     inject_lambda_context,
+)
+from serverless_toolkit.observability.lambda_logger.settings import (
+    LoggingSettings,
+    logging_settings,
 )
 
 
@@ -44,20 +48,38 @@ def test_lambda_get_logger_uses_explicit_level() -> None:
     assert logger.log_level == logging.DEBUG
 
 
-def test_lambda_get_logger_uses_environment_service_name(
+def test_lambda_settings_loads_environment_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("POWERTOOLS_SERVICE_NAME", "env-service-name")
+    monkeypatch.setenv("POWERTOOLS_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("POWERTOOLS_LOG_EVENT", "TRUE")
+
+    settings = LoggingSettings()
+
+    assert settings.POWERTOOLS_SERVICE_NAME == "env-service-name"
+    assert settings.POWERTOOLS_LOG_LEVEL == "DEBUG"
+    assert settings.POWERTOOLS_LOG_EVENT == "true"
+
+
+def test_lambda_get_logger_uses_configured_service_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        logging_settings,
+        "POWERTOOLS_SERVICE_NAME",
+        "env-service-name",
+    )
 
     logger = get_lambda_logger()
 
     assert logger.service == "env-service-name"
 
 
-def test_lambda_get_logger_uses_environment_log_level(
+def test_lambda_get_logger_uses_configured_log_level(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("POWERTOOLS_LOG_LEVEL", "DEBUG")
+    monkeypatch.setattr(logging_settings, "POWERTOOLS_LOG_LEVEL", "DEBUG")
 
     logger = get_lambda_logger(service="serverless-toolkit-test-env-log-level")
 
@@ -80,15 +102,9 @@ def test_inject_lambda_context_adds_lambda_metadata(
 
     captured = capfd.readouterr()
 
-    logs = [
-        json.loads(line)
-        for line in captured.out.splitlines()
-        if line.strip()
-    ]
+    logs = [json.loads(line) for line in captured.out.splitlines() if line.strip()]
 
-    log_data = next(
-        log for log in logs if log.get("message") == "Handler executed"
-    )
+    log_data = next(log for log in logs if log.get("message") == "Handler executed")
 
     assert log_data["service"] == "serverless-toolkit-test-context-metadata"
     assert log_data["function_name"] == "test-function"

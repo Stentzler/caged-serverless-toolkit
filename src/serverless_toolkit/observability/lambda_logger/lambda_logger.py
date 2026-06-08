@@ -1,7 +1,8 @@
-import os
 from typing import Any
 
 from aws_lambda_powertools import Logger
+
+from serverless_toolkit.observability.lambda_logger.settings import logging_settings
 
 
 def get_lambda_logger(
@@ -26,8 +27,8 @@ def get_lambda_logger(
         Configured AWS Lambda Powertools logger instance.
     """
     return Logger(
-        service=service or os.getenv("POWERTOOLS_SERVICE_NAME", "unknown-service"),
-        level=level or os.getenv("POWERTOOLS_LOG_LEVEL", "INFO"),
+        service=service or logging_settings.POWERTOOLS_SERVICE_NAME,
+        level=level or logging_settings.POWERTOOLS_LOG_LEVEL,
     )
 
 
@@ -59,7 +60,7 @@ def inject_lambda_context(
         log_event=(
             log_event
             if log_event is not None
-            else os.getenv("POWERTOOLS_LOG_EVENT", "false").lower() == "true"
+            else logging_settings.POWERTOOLS_LOG_EVENT == "true"
         ),
         clear_state=clear_state,
     )
