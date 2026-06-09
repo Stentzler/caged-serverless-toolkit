@@ -4,9 +4,10 @@
 
 Its purpose is to avoid duplicating the same setup across multiple Lambda repositories.
 
-For now, this repository only provides:
+For now, this repository provides:
 
 - Standardized logging for AWS Lambda functions.
+- Shared AWS SDK helpers for Lambda functions.
 
 ---
 
@@ -21,7 +22,7 @@ Example usage:
 ```python
 from typing import Any
 
-from serverless_toolkit.observability import (
+from serverless_toolkit.observability.lambda_logger import (
     get_lambda_logger,
     inject_lambda_context,
 )
@@ -97,6 +98,104 @@ POWERTOOLS_LOG_EVENT=false
 ```
 
 Keep this disabled by default because events may contain sensitive data.
+
+Logger settings are loaded lazily from the environment and cached for the
+process lifetime. Applications that need explicit configuration can inject an
+immutable settings object:
+
+```python
+from serverless_toolkit.observability.lambda_logger import (
+    LoggingSettings,
+    get_lambda_logger,
+)
+
+settings = LoggingSettings(
+    service_name="check-availability",
+    log_level="DEBUG",
+    log_event=False,
+)
+logger = get_lambda_logger(settings=settings)
+```
+
+---
+
+## DynamoDB
+
+The DynamoDB helper creates a cached `boto3` DynamoDB resource for Lambda
+execution environment reuse.
+
+Example usage:
+
+```python
+from serverless_toolkit.aws.dynamodb import get_dynamodb_table
+
+registry_table = get_dynamodb_table("downloaded_files_registry")
+```
+
+DynamoDB settings are also loaded lazily and cached. Explicit settings can be
+provided when a separate resource configuration is required:
+
+```python
+from serverless_toolkit.aws.dynamodb import (
+    DynamoDBSettings,
+    get_dynamodb_table,
+)
+
+local_settings = DynamoDBSettings(
+    endpoint_url="http://localhost:8000",
+    max_pool_connections=10,
+)
+registry_table = get_dynamodb_table(
+    "downloaded_files_registry",
+    settings=local_settings,
+)
+```
+
+Resources with equal settings are reused. Distinct settings receive distinct
+cached boto3 resources.
+
+In AWS Lambda, do not configure an endpoint URL. The AWS SDK resolves the
+DynamoDB endpoint from the configured region and uses the Lambda execution role
+for credentials.
+
+For local DynamoDB, set an endpoint override:
+
+```env
+DYNAMODB_ENDPOINT_URL=http://localhost:8000
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=dummy
+AWS_SECRET_ACCESS_KEY=dummy
+```
+
+### DynamoDB Environment Variables
+
+```env
+DYNAMODB_ENDPOINT_URL=
+AWS_ENDPOINT_URL_DYNAMODB=
+DYNAMODB_MAX_POOL_CONNECTIONS=10
+```
+
+### `DYNAMODB_ENDPOINT_URL`
+
+Optional endpoint override for local DynamoDB or custom environments.
+
+Recommended production default: unset.
+
+### `AWS_ENDPOINT_URL_DYNAMODB`
+
+Optional fallback endpoint override, compatible with AWS SDK endpoint naming.
+
+Recommended production default: unset.
+
+### `DYNAMODB_MAX_POOL_CONNECTIONS`
+
+Maximum number of connections kept in the underlying botocore connection pool.
+
+Default:
+
+```env
+DYNAMODB_MAX_POOL_CONNECTIONS=10
+```
 
 ---
 

@@ -1,17 +1,17 @@
 import json
 import logging
+from collections.abc import Iterator
+from dataclasses import FrozenInstanceError
 from typing import Any
 
 import pytest
 from aws_lambda_powertools import Logger
 
 from serverless_toolkit.observability.lambda_logger import (
-    get_lambda_logger,
-    inject_lambda_context,
-)
-from serverless_toolkit.observability.lambda_logger.settings import (
     LoggingSettings,
-    logging_settings,
+    get_lambda_logger,
+    get_logging_settings,
+    inject_lambda_context,
 )
 
 
@@ -25,6 +25,13 @@ class FakeLambdaContext:
     aws_request_id = "test-request-id"
     log_group_name = "/aws/lambda/test-function"
     log_stream_name = "2026/01/01/[$LATEST]abcdef"
+
+
+@pytest.fixture(autouse=True)
+def clear_logging_settings_cache() -> Iterator[None]:
+    get_logging_settings.cache_clear()
+    yield
+    get_logging_settings.cache_clear()
 
 
 def test_lambda_get_logger_returns_powertools_logger() -> None:
@@ -55,35 +62,78 @@ def test_lambda_settings_loads_environment_values(
     monkeypatch.setenv("POWERTOOLS_LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("POWERTOOLS_LOG_EVENT", "TRUE")
 
+    settings = get_logging_settings()
+
+    assert settings.service_name == "env-service-name"
+    assert settings.log_level == "DEBUG"
+    assert settings.log_event is True
+
+
+def test_logging_settings_provider_reuses_instance() -> None:
+    assert get_logging_settings() is get_logging_settings()
+
+
+def test_logging_settings_are_immutable() -> None:
     settings = LoggingSettings()
 
-    assert settings.POWERTOOLS_SERVICE_NAME == "env-service-name"
-    assert settings.POWERTOOLS_LOG_LEVEL == "DEBUG"
-    assert settings.POWERTOOLS_LOG_EVENT == "true"
+    with pytest.raises(FrozenInstanceError):
+        settings.service_name = "changed-service"
 
 
-def test_lambda_get_logger_uses_configured_service_name(
+def test_logging_settings_reject_invalid_boolean(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        logging_settings,
-        "POWERTOOLS_SERVICE_NAME",
-        "env-service-name",
+    monkeypatch.setenv("POWERTOOLS_LOG_EVENT", "invalid")
+
+    with pytest.raises(ValueError, match="Invalid boolean value"):
+        LoggingSettings()
+
+
+def test_lambda_get_logger_uses_injected_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("POWERTOOLS_SERVICE_NAME", "environment-service")
+    settings = LoggingSettings(
+        service_name="injected-service",
+        log_level="DEBUG",
     )
 
-    logger = get_lambda_logger()
+    logger = get_lambda_logger(settings=settings)
 
-    assert logger.service == "env-service-name"
+    assert logger.service == "injected-service"
+    assert logger.log_level == logging.DEBUG
 
 
-def test_lambda_get_logger_uses_configured_log_level(
+def test_lambda_get_logger_explicit_values_override_settings() -> None:
+    settings = LoggingSettings(
+        service_name="settings-service",
+        log_level="INFO",
+    )
+
+    logger = get_lambda_logger(
+        service="explicit-service",
+        level="DEBUG",
+        settings=settings,
+    )
+
+    assert logger.service == "explicit-service"
+    assert logger.log_level == logging.DEBUG
+
+
+def test_logging_settings_provider_reloads_environment_after_cache_clear(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(logging_settings, "POWERTOOLS_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("POWERTOOLS_SERVICE_NAME", "first-service")
+    first_settings = get_logging_settings()
 
-    logger = get_lambda_logger(service="serverless-toolkit-test-env-log-level")
+    monkeypatch.setenv("POWERTOOLS_SERVICE_NAME", "second-service")
+    cached_settings = get_logging_settings()
+    get_logging_settings.cache_clear()
+    reloaded_settings = get_logging_settings()
 
-    assert logger.log_level == logging.DEBUG
+    assert cached_settings is first_settings
+    assert cached_settings.service_name == "first-service"
+    assert reloaded_settings.service_name == "second-service"
 
 
 def test_inject_lambda_context_adds_lambda_metadata(
