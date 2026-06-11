@@ -199,6 +199,36 @@ DYNAMODB_MAX_POOL_CONNECTIONS=10
 
 ---
 
+## S3
+
+The S3 helper creates a cached low-level boto3 client for Lambda execution
+environment reuse. Use the client's managed transfer methods for file uploads.
+
+```python
+from serverless_toolkit.aws.s3 import get_s3_client
+
+s3_client = get_s3_client()
+s3_client.upload_file("/tmp/archive.7z", "caged-raw-data", "raw/archive.7z")
+s3_client.download_file("caged-raw-data", "raw/archive.7z", "/tmp/archive.7z")
+```
+
+Both methods use boto3's managed transfer implementation, including multipart
+transfers when the configured transfer thresholds require them.
+
+For local S3-compatible services, configure an endpoint override. Leave it
+unset in AWS so boto3 uses the configured region and Lambda execution role.
+
+```env
+S3_ENDPOINT_URL=http://localhost:4566
+AWS_ENDPOINT_URL_S3=
+S3_MAX_POOL_CONNECTIONS=10
+```
+
+Equal settings reuse the same client. Tests and applications that replace SDK
+configuration can call `reset_s3_client_cache()`.
+
+---
+
 ## Development
 
 Install dependencies:
