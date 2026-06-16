@@ -12,6 +12,7 @@ from botocore.config import Config
 class S3Settings:
     """Runtime configuration for S3 SDK clients."""
 
+    region_name: str | None = None
     endpoint_url: str | None = field(
         default_factory=lambda: (
             os.getenv("S3_ENDPOINT_URL") or os.getenv("AWS_ENDPOINT_URL_S3")
@@ -31,6 +32,9 @@ class S3Settings:
         kwargs: dict[str, Any] = {
             "config": build_s3_config(self.max_pool_connections),
         }
+
+        if self.region_name:
+            kwargs["region_name"] = self.region_name
 
         if self.endpoint_url:
             kwargs["endpoint_url"] = self.endpoint_url

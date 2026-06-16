@@ -65,6 +65,12 @@ def test_settings_omits_endpoint_url_when_unset(
     assert "endpoint_url" not in settings.resource_kwargs()
 
 
+def test_settings_applies_region_name() -> None:
+    settings = DynamoDBSettings(region_name="us-east-1")
+
+    assert settings.resource_kwargs()["region_name"] == "us-east-1"
+
+
 def test_settings_applies_max_pool_connections(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

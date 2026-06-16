@@ -2,16 +2,18 @@
 
 `serverless-toolkit` is a shared Python library for common utilities used by serverless applications.
 
-Its purpose is to avoid duplicating the same setup across multiple Lambda repositories.
+Its purpose is to avoid duplicating the same setup across serverless
+application repositories.
 
 For now, this repository provides:
 
 - Standardized logging for AWS Lambda functions.
-- Shared AWS SDK helpers for Lambda functions.
+- Standardized JSON logging for containerized tasks.
+- Shared AWS SDK helpers.
 
 ---
 
-## Logging
+## Lambda Logging
 
 The logging feature uses AWS Lambda Powertools Logger to generate structured JSON logs.
 
@@ -115,6 +117,59 @@ settings = LoggingSettings(
     log_event=False,
 )
 logger = get_lambda_logger(settings=settings)
+```
+
+---
+
+## Generic JSON Logging
+
+The generic logger creates compact JSON logs using the standard Python logging
+module. It is intended for containerized workloads, such as ECS tasks, that
+write application logs to stdout or stderr and let the task definition route
+those logs to CloudWatch Logs with `awslogs` or to another destination with
+FireLens.
+
+Example usage:
+
+```python
+from serverless_toolkit.observability.logger import get_logger
+
+logger = get_logger(service="caged-processing-task")
+
+logger.info("Starting task")
+```
+
+The logger emits the same minimal schema used by existing ECS task code:
+
+```json
+{"level": "INFO", "message": "Starting task", "logger": "caged-processing-task"}
+```
+
+Exception logs include an `exception` field.
+
+### Generic Logger Environment Variables
+
+```env
+LOG_LEVEL=INFO
+```
+
+### `LOG_LEVEL`
+
+Defines the minimum log level.
+
+Example:
+
+```env
+LOG_LEVEL=INFO
+```
+
+Applications can also pass explicit settings:
+
+```python
+from serverless_toolkit.observability.logger import LoggingSettings, get_logger
+
+settings = LoggingSettings(log_level="DEBUG")
+logger = get_logger(service="caged-processing-task", settings=settings)
 ```
 
 ---

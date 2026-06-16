@@ -12,6 +12,7 @@ from botocore.config import Config
 class DynamoDBSettings:
     """Runtime configuration for DynamoDB SDK resources."""
 
+    region_name: str | None = None
     endpoint_url: str | None = field(
         default_factory=lambda: (
             os.getenv("DYNAMODB_ENDPOINT_URL") or os.getenv("AWS_ENDPOINT_URL_DYNAMODB")
@@ -31,6 +32,9 @@ class DynamoDBSettings:
         kwargs: dict[str, Any] = {
             "config": build_dynamodb_config(self.max_pool_connections),
         }
+
+        if self.region_name:
+            kwargs["region_name"] = self.region_name
 
         if self.endpoint_url:
             kwargs["endpoint_url"] = self.endpoint_url

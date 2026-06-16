@@ -61,6 +61,12 @@ def test_settings_omits_endpoint_url_when_unset(
     assert "endpoint_url" not in S3Settings().client_kwargs()
 
 
+def test_settings_applies_region_name() -> None:
+    assert S3Settings(region_name="us-east-1").client_kwargs()["region_name"] == (
+        "us-east-1"
+    )
+
+
 def test_settings_applies_max_pool_connections() -> None:
     config = S3Settings(max_pool_connections=25).client_kwargs()["config"]
 
